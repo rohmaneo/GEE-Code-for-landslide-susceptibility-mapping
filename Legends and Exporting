@@ -1,0 +1,106 @@
+
+//-------------------------//
+// set position of panel
+var legend = ui.Panel({
+style: {
+position: 'bottom-left',
+padding: '8px 15px'
+}
+});
+ 
+// Create legend title
+var legendTitle = ui.Label({
+value: 'Longsor',
+style: {
+fontWeight: 'bold',
+fontSize: '18px',
+margin: '0 0 4px 0',
+padding: '0'
+}
+});
+ 
+// Add the title to the panel
+legend.add(legendTitle);
+ 
+// create the legend image
+var lon = ee.Image.pixelLonLat().select('latitude');
+var gradient = lon.multiply((viz.max-viz.min)/100.0).add(viz.min);
+var legendImage = gradient.visualize(viz);
+ 
+// create text on top of legend
+var panel = ui.Panel({
+widgets: [
+ui.Label(viz['max'])
+],
+});
+ 
+legend.add(panel);
+ 
+// create thumbnail from the image
+var thumbnail = ui.Thumbnail({
+image: legendImage,
+params: {bbox:'0,0,10,100', dimensions:'10x200'},
+style: {padding: '1px', position: 'bottom-center'}
+});
+ 
+// add the thumbnail to the legend
+legend.add(thumbnail);
+ 
+// create text on top of legend
+var panel = ui.Panel({
+widgets: [
+ui.Label(viz['min'])
+],
+});
+ 
+legend.add(panel);
+ 
+Map.add(legend);
+
+
+Map.addLayer(classification.clip(ponopaci),{min:0,max:0.9,palette:"black,green,yellow,red"},"predictionRF")
+//Map.addLayer(ponopaci,0);
+Map.addLayer(LP.select("b1").clip(ponopaci),{min:0,max:1,palette:"green,yellow,red"},"landslideDATA",0)
+//Map.addLayer(LP.select("Avg201711").clip(ponopaci),{min:17.1,max:18,palette:"green,yellow,red"},"precipitation",0)
+Map.addLayer(LP.select("b1_1").clip(ponopaci),{min:17.1,max:18,palette:"green,yellow,red"},"tanah",0)
+Map.addLayer(LP.select("ndvi2017").clip(ponopaci),{min:0,max:1,palette:"green,yellow,red"},"NDVI",0)
+Map.addLayer(LP.select("elevation").clip(ponopaci),{min:300,max:700,palette:"green,yellow,red"},"elevation",0)
+Map.addLayer(LP.select("slope").clip(ponopaci),{min:0,max:75,palette:"green,yellow,red"},"slope",0)
+Map.addLayer(LP.select("aspect").clip(ponopaci),{min:0,max:360,palette:"green,yellow,red"},"aspect",0)
+Map.addLayer(LP.select("AvgS1").clip(ponopaci),{min:0,max:75,palette:"green,yellow,red"},"precp",0)
+Map.addLayer(myP1,{},"random points Yes",0);
+Map.addLayer(myP2,{},"random points No",0);
+Map.addLayer(myPoints,{},"random points All",0);
+
+Export.image.toDrive({
+  image: classification, 
+  description: 'result_RF_30',
+  fileNamePrefix: 'result_RF_30',
+  region: ponopaci,
+  folder: 'PONOPACIresample',
+  maxPixels: 1e10
+});
+//-----------------------------------------------EXPORT
+// Export the FeatureCollection.
+Export.table.toDrive({
+  collection: test1,
+  description: 'PonoPaci_test',
+  fileFormat: 'ShapeFile'
+});
+
+Export.table.toAsset({
+  collection: result2,
+  description:'PonoPaci_Random_Points',
+  assetId: 'PonoPaci_Random_Points'
+});
+Export.table.toAsset({
+  collection: train1,
+  description:'PonoPaci_Train_Points',
+  assetId: 'PonoPaci_Train_Points'
+});
+Export.table.toAsset({
+  collection: test1,
+  description:'PonoPaci_Test_Points',
+  assetId: 'PonoPaci_Test_Points'
+});
+
