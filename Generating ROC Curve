@@ -1,0 +1,51 @@
+// Calculate the Receiver Operating Characteristic (ROC) curve
+// -----------------------------------------------------------
+var myPoints2 = ee.FeatureCollection.randomPoints({
+  region:Kyes,
+  points:50,
+});
+
+var myPoints3 = ee.FeatureCollection.randomPoints({
+  region:abcd,
+  points:50,
+});
+// Sample input points.
+var agri = classification.reduceRegions(myPoints2,ee.Reducer.max().setOutputs(['b1']),20).map(function(x){return x.set('is_target',1);})
+var urban = classification.reduceRegions(myPoints3,ee.Reducer.max().setOutputs(['b1']),20).map(function(x){return x.set('is_target',0);})
+var combined = agri.merge(urban)
+
+// Show NDVI of points
+print(agri.aggregate_array('b1'),'Ag NDVI')
+print(urban.aggregate_array('b1'),'Urban NDVI')
+// Chance these as needed
+var ROC_field = 'b1';
+var ROC_min = 0;
+var ROC_max = 100;
+var ROC_steps = 1000;
+var ROC_points = combined;
+
+var ROC = ee.FeatureCollection(ee.List.sequence(ROC_min, ROC_max, null, ROC_steps).map(function (cutoff) {
+  var target_roc = ROC_points.filterMetadata('is_target','equals',1)
+  // true-positive-rate, sensitivity  
+  var TPR = ee.Number(target_roc.filterMetadata(ROC_field,'greater_than',cutoff).size()).divide(target_roc.size()) 
+  var non_target_roc = ROC_points.filterMetadata('is_target','equals',0)
+  // true-negative-rate, specificity  
+  var TNR = ee.Number(non_target_roc.filterMetadata(ROC_field,'less_than',cutoff).size()).divide(non_target_roc.size()) 
+  return ee.Feature(null,{cutoff: cutoff, TPR: TPR, TNR: TNR, FPR:TNR.subtract(1).multiply(-1),  dist:TPR.subtract(1).pow(2).add(TNR.subtract(1).pow(2)).sqrt()})
+}))
+// Use trapezoidal approximation for area under curve (AUC)
+var X = ee.Array(ROC.aggregate_array('FPR')), 
+    Y = ee.Array(ROC.aggregate_array('TPR')), 
+    Xk_m_Xkm1 = X.slice(0,1).subtract(X.slice(0,0,-1)),
+    Yk_p_Ykm1 = Y.slice(0,1).add(Y.slice(0,0,-1)),
+    AUC = Xk_m_Xkm1.multiply(Yk_p_Ykm1).multiply(0.5).reduce('sum',[0]).abs().toList().get(0)
+print(AUC,'Area under curve')
+// Plot the ROC curve
+print(ui.Chart.feature.byFeature(ROC, 'FPR', 'TPR').setOptions({
+      title: 'ROC curve',
+      legend: 'none',
+      hAxis: { title: 'False-positive-rate'},
+      vAxis: { title: 'True-negative-rate'},
+      lineWidth: 1}))
+// find the cutoff value whose ROC point is closest to (0,1) (= "perfect classification")      
+var ROC_best = ROC.sort('dist').first().get('cutoff').aside(print,'best ROC point cutoff')
