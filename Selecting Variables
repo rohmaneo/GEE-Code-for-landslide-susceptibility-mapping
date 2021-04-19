@@ -1,0 +1,127 @@
+var viz = {min:0, max:1, palette:['green','yellow','red']};    
+// import data
+
+
+//LP = LP.addBands(Precp04);
+//LP = LP.addBands(Precp11);
+LP = LP.addBands(PS1);
+//LP = LP.addBands(pop);
+//LP = LP.addBands(PS3);
+LP = LP.addBands(ndvi);
+LP = LP.addBands(elev);
+LP = LP.addBands(slope);
+LP = LP.addBands(Aspect);
+LP = LP.addBands(tanah);
+//LP = LP.addBands(chirps);
+// create random points
+
+var Kyes = KyesAll;
+//var Kyes = KyesPaci.merge(KyesPono);
+
+var Kno = KnoPaci.merge(KnoPono);
+//160 - 240 ama 600-400
+var myP1 = ee.FeatureCollection.randomPoints({
+  region:Kyes,
+  points:400,
+});
+
+var myP2 = ee.FeatureCollection.randomPoints({
+  region:Kno,
+  points:600,
+});
+
+var myPoints = myP1.merge(myP2); 
+/*
+var myPoints = ee.FeatureCollection.randomPoints({
+  region:traintest,
+  points:500,
+});
+*/
+
+//Map.addLayer(myPoints,{},"random points");
+
+
+var result2 = LP.reduceRegions(myPoints,ee.Reducer.max());
+// print the output
+
+print(result2);
+Map.centerObject(ponopaci,11);
+
+//Map.addLayer(referenceData);
+print(LP);
+//Map.addLayer(traintest);
+
+var bandNames = LP.bandNames();
+print(bandNames);
+
+
+//sample
+var sample = result2.randomColumn("random");
+var train1 = sample.filter(ee.Filter.lt("random",0.7))
+var test1 = sample.filter(ee.Filter.gte('random', 0.7));
+var trainingSample = LP.sampleRegions(train1,["b1"],4);
+var testingSample = LP.sampleRegions(testdata,["b1"],10);
+
+
+var classifier = ee.Classifier.smileRandomForest({numberOfTrees:150, 
+  variablesPerSplit:null,
+  minLeafPopulation:2,
+  bagFraction:0.5,
+  maxNodes:35
+}).setOutputMode('PROBABILITY').train(trainingSample,"b1",bandNames);
+ 
+var dict = classifier.explain();
+print('Explain:',dict);
+
+var variable_importance = ee.Feature(null, ee.Dictionary(dict).get('importance'));
+
+var chart =
+  ui.Chart.feature.byProperty(variable_importance)
+    .setChartType('ColumnChart')
+    .setOptions({
+      title: 'Random Forest Variable Importance',
+      legend: {position: 'none'},
+      hAxis: {title: 'Bands'},
+      vAxis: {title: 'Importance'}
+    });
+
+
+print(chart); 
+ 
+var classification = LP.classify(classifier).multiply(1)
+
+var classifier2 = ee.Classifier.smileRandomForest({numberOfTrees: 100, 
+  variablesPerSplit:null,
+  minLeafPopulation:1,
+  bagFraction:0.5,
+  maxNodes:35
+}).train(testingSample,"b1",bandNames);
+print(classifier2); 
+//var classification = LP2.classify(classifier2).multiply(100)
+// Remap values.
+var customRemap = function(image, lowerLimit, upperLimit, newValue) {
+  var mask = image.gte(lowerLimit).and(image.lt(upperLimit))
+  return image.where(mask, newValue)
+}
+
+// values from 0 to 0.5 will be 10, the rest will not change
+var reclass = customRemap(classification, 0, 0.75, 0) 
+print(reclass);
+reclass = customRemap(reclass, 0.75, 1, 1) 
+var validated = reclass.sampleRegions(test1,["b1"]);
+print(validated);
+var confMatrix = validated.errorMatrix('b1','classification');
+
+ 
+var OA = confMatrix.accuracy();
+var CA = confMatrix.consumersAccuracy();
+var Kappa = confMatrix.kappa();
+var Order = confMatrix.order();
+var PA = confMatrix.producersAccuracy();
+ 
+print(confMatrix,'Confusion Matrix');
+print(OA,'Overall Accuracy');
+print(CA,'Consumers Accuracy');
+print(Kappa,'Kappa');
+print(Order,'Order');
+print(PA,'Producers Accuracy');
